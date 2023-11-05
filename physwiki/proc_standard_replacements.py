@@ -6,7 +6,7 @@ import pandas as pd
 
 def standard_replacements(filename, args):
     content = read_text_file(filename)
-    df_replacements = pd.read_csv("replacements1.csv" )
+    df_replacements = pd.read_csv(args.std )
     df_replacements.dropna(inplace=True)
     
     for i,x in df_replacements.iterrows():

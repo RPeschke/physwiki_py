@@ -25,6 +25,7 @@ def main(debug_path = None):
     parser.add_argument('--md', help='Markdown File',default="2023 test")
     parser.add_argument('--processors', help='List of Processors (can be empty)',default="None")
     parser.add_argument('--zip', help='zip file with the latex',default="None")    
+    parser.add_argument('--std', help='standard replacements',default="replacements1.csv")    
     args = parser.parse_args()
     filename = get_path_from_name(args.md, debug_path ).replace("\\","/")
     filename = filename + "/" +args.md + ".md"
