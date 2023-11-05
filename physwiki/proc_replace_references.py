@@ -2,6 +2,13 @@ from physwiki.formula_as_file import formula_as_file_internal
 from physwiki.generic import read_text_file ,write_text_file, physwiki_processors
 import re, os
 
+uni = []
+
+uni.extend( [chr(0x2474 + i) for i in range(20)] )
+uni.extend( [chr(0x249C + i) for i in range(26)] )
+uni.extend( [chr(0x1F110 + i) for i in range(26)] )
+uni.extend( [chr(0x1F130 + i) for i in range(26)] )
+
 
 def replace_ref(filename, args):
     # find pattern \[ number \]]    

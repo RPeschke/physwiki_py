@@ -1,5 +1,5 @@
 from physwiki.formula_as_file import formula_as_file_internal
-from physwiki.generic import read_text_file ,write_text_file, physwiki_processors
+from physwiki.generic import read_text_file ,write_text_file, physwiki_processors, try_create_dir
 
 import re, os
 

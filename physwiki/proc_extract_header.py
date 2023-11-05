@@ -1,6 +1,6 @@
 from physwiki.generic import read_text_file ,write_text_file, physwiki_processors
 import re, os
-
+import pandas as pd
 
 class groupping:
     def __init__(self) -> None:

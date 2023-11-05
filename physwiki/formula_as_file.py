@@ -5,8 +5,6 @@ def formula_as_file_internal( formula, file):
     
     formula = formula.replace('\n', ' ')
     r = requests.get( 'http://latex.codecogs.com/png.latex?\dpi{{300}} {formula}'.format(formula=formula))
-    #print('http://latex.codecogs.com/gif.latex?%5Cdpi%7B300%7D%20%5Cbegin%7Bbmatrix%7D%202%20%26%200%20%5C%5C%200%20%26%202%20%5C%5C%20%5Cend%7Bbmatrix%7D')
-    #print(r.url)
     f = open(file, 'wb')
     f.write(r.content)
     f.close()
