@@ -1,10 +1,12 @@
 
-from physwiki.generic import read_text_file ,write_text_file, physwiki_processors
+from physwiki.generic import read_text_file ,write_text_file
 import pandas as pd
 
 
 
 def standard_replacements(filename, args):
+    print("standard_replacements")
+
     content = read_text_file(filename)
     df_replacements = pd.read_csv(args.std )
     df_replacements.dropna(inplace=True)
@@ -17,4 +19,9 @@ def standard_replacements(filename, args):
     write_text_file(filename, content)
 
 
-physwiki_processors['standard_replacements'] = standard_replacements
+
+import physwiki as pwiki 
+
+@pwiki.configuration
+def config(obj: pwiki.physwiki_script_base_class):
+    obj.add_processor(standard_replacements)

@@ -5,6 +5,8 @@ import re
 
 
 def remove_formatting(filename, args):
+    print("remove_formatting")
+
     content = read_text_file(filename)
 
     # find pattern ::: widetext  ... :::
@@ -24,4 +26,8 @@ def remove_formatting(filename, args):
     write_text_file(filename, content)
 
 
-physwiki_processors["remove_formatting"] = remove_formatting
+import physwiki as pwiki 
+
+@pwiki.configuration
+def config(obj: pwiki.physwiki_script_base_class):
+    obj.add_processor(remove_formatting)

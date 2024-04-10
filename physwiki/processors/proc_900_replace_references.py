@@ -1,5 +1,5 @@
-from physwiki.formula_as_file import formula_as_file_internal
-from physwiki.generic import read_text_file ,write_text_file, physwiki_processors
+
+from physwiki.generic import read_text_file ,write_text_file
 import re, os
 
 uni = []
@@ -11,6 +11,8 @@ uni.extend( [chr(0x1F130 + i) for i in range(26)] )
 
 
 def replace_ref(filename, args):
+    print("replace_ref")
+
     # find pattern \[ number \]]    
     content = read_text_file(filename)
     ref_index = content.find("## References")
@@ -29,4 +31,8 @@ def replace_ref(filename, args):
     
 
 
-physwiki_processors['replace_ref'] = replace_ref
+import physwiki as pwiki 
+
+@pwiki.configuration
+def config(obj: pwiki.physwiki_script_base_class):
+    obj.add_processor(replace_ref)

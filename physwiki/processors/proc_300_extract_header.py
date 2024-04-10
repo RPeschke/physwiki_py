@@ -1,6 +1,8 @@
 from physwiki.generic import read_text_file ,write_text_file, physwiki_processors
 import re, os
 import pandas as pd
+import physwiki as pwiki 
+
 
 class groupping:
     def __init__(self) -> None:
@@ -11,8 +13,24 @@ class groupping:
             self.counter += 1
         return self.counter
     
+def clean_headlines_in_markdown(file_content):
+    """
+    Remove curly braces and their contents from headlines in markdown text.
+
+    :param file_content: The content of the markdown file as a string
+    :return: The modified content with cleaned headlines
+    """
+    # Regular expression to match markdown headers with curly braces
+    pattern = re.compile(r'(#+ .+?) {.*?}\n')
+
+    # Replace occurrences of the pattern with just the headline text
+    cleaned_content = re.sub(pattern, r'\1\n', file_content)
+
+    return cleaned_content
 
 def extract_header(filename, args):
+    print('extract_header')
+
     header = ""
     content = read_text_file(filename)
     
@@ -57,7 +75,14 @@ def extract_header(filename, args):
     
     content = "# " + title + "\n\n" +str(header_dict.get("author")) + "\n\n" +year_journal+  '\n\n## Abstract\n\n' + str(header_dict.get("abstract")) + "\n\n" + content
     
+    content =  clean_headlines_in_markdown(content)
+
     write_text_file(filename, content)
     
     
-physwiki_processors['extract_header'] = extract_header
+
+
+
+@pwiki.configuration
+def config(obj: pwiki.physwiki_script_base_class):
+    obj.add_processor(extract_header)

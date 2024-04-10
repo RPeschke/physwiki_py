@@ -1,4 +1,8 @@
-from physwiki.generic import read_text_file ,write_text_file, physwiki_processors,try_create_dir, get_path_from_name
+from physwiki.generic import read_text_file ,write_text_file, try_create_dir, get_path_from_name
+
+
+import physwiki as pwiki 
+
 import re, os
 import time
 
@@ -16,8 +20,9 @@ def unzip_archive(filename, path):
 
 
 
-def zip_to_md(Filename, args):
-    
+def unzip(Filename, args):
+    print('unzip')
+
     zip_path = args.zip
     md_path  = args.md
     f2 = get_path_from_name(md_path)
@@ -31,11 +36,11 @@ def zip_to_md(Filename, args):
     
 
     time.sleep(1)
-    tex = os.listdir(f2+"/src")[0]
-    md = f2 + "/" + md_path + ".md"
-    cmd = 'pandoc -s "' + f2+"/src/" + tex + '"  -o "' + md +'"'
-    os.system(cmd)  
-    return md
 
 
-physwiki_processors['zip_to_md'] = zip_to_md
+
+
+@pwiki.configuration
+def config(obj: pwiki.physwiki_script_base_class):
+    obj.add_processor(unzip)
+

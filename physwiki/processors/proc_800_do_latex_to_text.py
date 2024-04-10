@@ -1,15 +1,16 @@
-from physwiki.generic import read_text_file ,write_text_file, physwiki_processors
+from physwiki.generic import read_text_file ,write_text_file
 import re
 from pylatexenc.latex2text import LatexNodes2Text
 
 
 def do_latex_to_text(filename, args):
+    print("do_latex_to_text")
     content = read_text_file(filename)
     pattern = r"\$.*?\$"
     matches = re.findall(pattern, content, re.DOTALL)
     
-    content += "\n\n## Latex Replacements\n\n"
-    ret = ""
+    #content += "\n\n## Latex Replacements\n\n"
+    #ret = ""
     for index, match in enumerate(matches):
         print(match)
         print("-------------------------------------")
@@ -42,9 +43,9 @@ def do_latex_to_text(filename, args):
         
         content = content.replace(match, txt)
         
-        ret += "\n\n### inline_eq_"+ str(index)  + "\n\n" + match + "\n\n"
+       # ret += "\n\n### inline_eq_"+ str(index)  + "\n\n" + match + "\n\n"
         
-    content += ret
+    #content += ret
     
         
         
@@ -52,5 +53,10 @@ def do_latex_to_text(filename, args):
     
     write_text_file(filename, content)
     
-    
-physwiki_processors["do_latex_to_text"] = do_latex_to_text
+
+
+import physwiki as pwiki 
+
+@pwiki.configuration
+def config(obj: pwiki.physwiki_script_base_class):
+    obj.add_processor(do_latex_to_text)
