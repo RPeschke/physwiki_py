@@ -3,6 +3,18 @@ import os
 import numpy as np
 
 
+
+
+def load_file(filename):
+    with open(filename, 'r', encoding='utf-8') as file:
+        content = file.read()
+        return content
+    
+
+def save_file(filename, content):
+    with open(filename, 'w', encoding='utf-8') as file:
+        file.write(content)
+        
 def read_text_file(text_file):
     # read in unicode text file
     
