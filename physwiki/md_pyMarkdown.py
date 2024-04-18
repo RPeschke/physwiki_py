@@ -91,7 +91,8 @@ class new_scope():
         
         
     
-
+def make_new_link(link, scope):
+    return f"[{scope(link['call'], link)}]({link["call_str"]})"
 
 
 def update_markdown(content):
@@ -131,7 +132,9 @@ def extract_complex_markdown_links(markdown_text, score):
         img_url = match.group(2)       # URL of the image
         link_url = match.group(3)      # URL of the outer link
         start_pos = match.start()
-        
+        if "#python@" not in link_url:
+            continue
+
         offset = 1
         if  not "("  in link_url:
             offset = 0
@@ -140,19 +143,60 @@ def extract_complex_markdown_links(markdown_text, score):
 
         end_pos = match.end()+offset
         # Store details in a dictionary for better structure
-        
+        call  = link_url.replace("#python@" , "")
+        call  = call.replace("python@" , "")
+        call_str = link_url if score != 10 else "#python@" + link_url
+
         links.append({
                 'text': f"![{img_alt_text}]({img_url})",
                 'url': link_url,
                 'start_pos': start_pos,
                 'end_pos': end_pos,
-                "score" : score
+                "score" : score,
+                "update_function" : make_new_link,
+                "call" : call,
+                "call_str" : call_str
         })
        
 
     return links
 
+def extract_python_code_blocks(markdown_text, score):
+    def make_new_code_block(link, scope):
+        return f"""
+```python@{link["url"]} 
+{scope(link['call'], link)}
+```
+"""
+    # Regex pattern to capture Python code blocks with a specific start pattern
+    pattern = re.compile(
+        r'```python@(\w+\([^)]*\))\n(.*?)\n```', re.DOTALL
+    )
 
+    # Find all matches in the markdown text
+    code_blocks = []
+    for match in pattern.finditer(markdown_text):
+        function_call = match.group(1)  # Capture the function call after '@'
+        code_body = match.group(2)      # Capture the code block body
+        start_pos = match.start()
+        end_pos = match.end()
+        call  = function_call.replace("#python@" , "")
+        call  =call.replace("python@" , "")
+        call_str = "python@" + function_call
+
+        # Store details in a dictionary for better structure
+        code_blocks.append({
+            'url': function_call,
+            'text': code_body.strip(),
+            'start_pos': start_pos,
+            'end_pos': end_pos,
+            "score" : score,
+            "update_function" : make_new_code_block,
+            "call" : call,
+            "call_str" : call_str
+        })
+
+    return code_blocks
 
 def extract_links_with_positions(content):
     def get_links(content, regex, score):
@@ -161,14 +205,24 @@ def extract_links_with_positions(content):
         for match in matches:
             start_pos = match.start()
             end_pos = match.end()
+            if "#python@" not in content[start_pos: end_pos]:
+                continue
+
             link_text = match.group(1)
             url = match.group(2)
+            call  = url.replace("#python@" , "")
+            call  =call.replace("python@" , "")
+            call_str = url if score != 10 else "#python@" + url
+
             links.append({
                 'text': link_text,
                 'url': url,
                 'start_pos': start_pos,
                 'end_pos': end_pos,
-                "score" : score
+                "score" : score,
+                "update_function" : make_new_link,
+                "call" : call,
+                "call_str" : call_str
             })
 
         return links
@@ -200,31 +254,19 @@ def extract_links_with_positions(content):
         extract_complex_markdown_links(content, 20)
     )
 
+    links.extend(
+        extract_python_code_blocks(content, 30)
+    )
+
     df = pd.DataFrame(links)
     df = df.sort_values(by=['start_pos', 'score'], ascending=[True, False])
     df = df.drop_duplicates(subset='start_pos', keep='first')
     
 
 
-    
-    def normalize_function_call(link):
-        if "#python@" in link['url'] :
-            return  link['url'][8:]
-            
 
-        if link['score'] ==10:
-            return  link['url']
-            
-        return None
 
-    def normalize_function_call_str(link):
-        if link['score'] ==10:
-            return  "#python@" + link['url']
-            
-        return link['url']
 
-    df["call"]  = df.apply( normalize_function_call ,axis= 1)
-    df["call_str"]  = df.apply( normalize_function_call_str ,axis= 1)
     return df
 
 # Example usage
@@ -309,7 +351,7 @@ def update_content(content, links, scope):
     for i, link in links.iterrows():
         if link['call'] is not None:
             link['line'] = content[:link['start_pos']].count('\n') + 1 
-            newString = f"[{scope(link['call'], link)}]({link["call_str"]})"
+            newString = link["update_function"](link, scope) # f"[{scope(link['call'], link)}]({link["call_str"]})"
             content = replace_substring(content, link['start_pos'] + offset, link['end_pos'] + offset, newString)
             offset += len(newString) - (link['end_pos'] -  link['start_pos'])    
 
