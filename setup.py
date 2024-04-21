@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="physwiki", 
-    version="0.0.24",
+    version="0.0.30",
     author="Richard Peschke",
     author_email="peschke@hawaii.edu",
     description="",

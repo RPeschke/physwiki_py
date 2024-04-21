@@ -1,7 +1,7 @@
 #function that reads in text file 
 import os
 import numpy as np
-
+from pylatexenc.latex2text import LatexNodes2Text
 
 
 
@@ -29,7 +29,16 @@ def write_text_file(text_file, text):
     f.write(text)
     f.close()
     
+
+def latex_to_text(latex):
     
+    non_latex = LatexNodes2Text().latex_to_text(latex)
+    f = non_latex.find("\n")
+    end_str = "" if f == -1 else "\n\n"
+    non_latex = non_latex.strip()
+    non_latex = " ".join(non_latex.split())
+    return "`" + non_latex +"`"
+
 def try_create_dir(path):
     try:
         os.mkdir(path)

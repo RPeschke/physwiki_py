@@ -89,19 +89,36 @@ class new_scope():
         return self.get_object_from_scope(x[0])
         
         
-        
+class md_text_replacement_base:
+
+    def update_function(self, scope)    :
+        pass
+
+    def run_code(self, scope):
+        pass
+
+
     
+
+
 def make_new_link(link, scope):
     return f"[{scope(link['call'], link)}]({link["call_str"]})"
 
 
+class md_update_md_links(md_text_replacement_base):
+    def __init__(self, call, call_str) -> None:
+        self.call = call
+        self.call_str = call_str
+
+    def update_function(self, scope):
+        return f"[{scope(self.call, self)}]({self.call_str})"
+
 def update_markdown(content):
     scope = new_scope()
 
-    links = extract_links_with_positions(content)
-    refs = find_hidden_references_with_positions(content)
-    handle_hidden_refs(refs, scope)
+    links = extract_links_with_positions(content, scope)
     content = update_content(content , links, scope)
+
     return content
 
 
@@ -161,6 +178,133 @@ def extract_complex_markdown_links(markdown_text, score):
 
     return links
 
+
+def new_tag_block(link, scope):
+    textblock = scope(link['call'], link)
+    for i in range(10 , -1 ,-1 ):
+        textblock = textblock.replace(f"filelevel{i}",f"filelevel{i+1}")
+    
+    if  textblock.find("<filelevel0>") != -1:
+        raise Exception("to many levels of nesting")
+    
+    return f'<physwiki call="{link["url"]}"><filelevel0>\n{textblock}\n</filelevel0></physwiki>\n'
+    
+    
+
+def updated_custom_tags(markdown_text, score):
+    def find_tags_and_content(text, tag):
+        # Regex pattern to match tags and extract content
+        pattern = re.compile(r'<{}>(.*?)</{}>'.format(tag, tag), re.DOTALL)
+        
+        # Find all matches in the provided text
+        matches = pattern.finditer(text)
+        
+        return matches
+    
+
+
+
+    # Find all matches in the provided text
+    matches = find_tags_and_content(markdown_text, "filelevel0")
+    physwiki_endtag = "</physwiki>"
+    code_blocks = []
+    for match in matches:
+        start_pos = markdown_text[:match.start()].rfind("<physwiki")
+        end_pos   = markdown_text.find(physwiki_endtag, match.end())
+        if end_pos == -1 or start_pos == -1:
+            raise Exception("cant find begin or end tags")
+        end_pos = end_pos+ len(physwiki_endtag)
+        
+        call_begin = markdown_text[: match.start()].find('"',start_pos)
+        call_end = markdown_text[: match.start()].rfind('"')
+        call = markdown_text[call_begin+1:call_end]
+
+        code_blocks.append({
+            'url': call,
+            'text': "",
+            'start_pos':start_pos,
+            'end_pos': end_pos,
+            "score" : score,
+            "update_function" : new_tag_block,
+            "call" : call,
+            "call_str" : ""
+        })
+    return code_blocks
+
+def handle_physwiki_call(markdown_text, match, score):
+    attributes = match.group(2)
+    first_position = attributes.find('"')
+    last_position = attributes.rfind('"')
+    call = attributes[first_position+1:last_position]
+    return {
+            'url': call,
+            'text': "",
+            'start_pos':match.start(),
+            'end_pos': match.end(),
+            "score" : score,
+            "update_function" : new_tag_block,
+            "call" : call,
+            "call_str" : ""
+        }
+
+def handle_physwiki_include(markdown_text, match, score, scope):
+    attributes = match.group(2)
+    first_position = attributes.find('"')
+    last_position = attributes.rfind('"')
+    file_path = attributes[first_position+1:last_position]
+    scope.import_from_filepath_full(file_path)
+
+def handle_physwiki_define(markdown_text, match, score, scope):
+    attributes = match.group(2)
+    first_position = attributes.find('"')
+    last_position = attributes.rfind('"')
+    definition = attributes[first_position+1:last_position]
+    d = definition.split("=")
+    x1 = scope.split_function_call( d[1])
+    if x1[1] is None and "'" in d[1]:
+        exec(definition, globals(), scope.local_scope1)
+    elif x1[1] is None:
+        scope.local_scope1[d[0].strip()]  = scope.get_object_from_scope(x1[0])
+    else:
+        scope.local_scope1[d[0].strip()]  = scope.get_object_from_scope(x1[0])(*x1[1][0],**x1[1][1] )
+
+
+            
+            
+
+def find_custom_tags(markdown_text, score, scope):
+    
+    # Regex pattern to match custom tags like <physwiki call="myFunction()"/>
+    # This pattern captures the tag name and its attributes.
+    pattern = re.compile(r'<(\w+)\s+([^>]+?)/>')
+
+    # Find all matches in the provided text
+    matches = pattern.finditer(markdown_text)
+    code_blocks = []
+    for match in matches:
+        tag = match.group(1)
+        attributes = match.group(2)
+        if "physwiki" not in tag:
+            continue
+        
+        attribute_name = attributes.split("=")[0]
+        if attribute_name == "call":
+            code_blocks.append( handle_physwiki_call(markdown_text, match , score) )
+            continue
+        
+        if attribute_name == "include":
+            handle_physwiki_include(markdown_text, match, score, scope)
+            continue
+
+        if attribute_name == "define":
+            handle_physwiki_define(markdown_text, match, score, scope)
+            continue
+            
+                               
+
+    return code_blocks
+
+
 def extract_python_code_blocks(markdown_text, score):
     def make_new_code_block(link, scope):
         return f"""
@@ -198,7 +342,7 @@ def extract_python_code_blocks(markdown_text, score):
 
     return code_blocks
 
-def extract_links_with_positions(content):
+def extract_links_with_positions(content, scope):
     def get_links(content, regex, score):
         matches = regex.finditer(content)
         links = []
@@ -257,7 +401,12 @@ def extract_links_with_positions(content):
     links.extend(
         extract_python_code_blocks(content, 30)
     )
-
+    links.extend(
+        find_custom_tags(content, 40, scope)
+    )
+    links.extend(
+        updated_custom_tags(content , 50)
+    )
     df = pd.DataFrame(links)
     df = df.sort_values(by=['start_pos', 'score'], ascending=[True, False])
     df = df.drop_duplicates(subset='start_pos', keep='first')
@@ -274,63 +423,6 @@ def extract_links_with_positions(content):
 
 
 
-def find_hidden_references_with_positions(markdown_text):
-    # Regex pattern to match reference-style links
-    # Matches: [label]: url "optional title"
-    pattern = re.compile(r'\[(.*?)\]:\s*(\S+)\s*(".*?")?')
-
-    references = []
-    for match in pattern.finditer(markdown_text):
-        start_pos = match.start()
-        end_pos = match.end()
-        label = match.group(1)
-        url = match.group(2)
-        title = match.group(3).strip('"') if match.group(3) else None
-        
-        references.append({
-            'label': label,
-            'url': url,
-            'title': title,
-            'start_pos': start_pos,
-            'end_pos': end_pos
-        })
-
-    return references
-
-
-
-def handle_hidden_refs(refs, scope ):
-    
-
-    for x in refs:
-        if "include" in x["url"]:
-            file_path = x["title"]
-            scope.import_from_filepath_full(file_path)
-            with open(file_path, 'r', encoding='utf-8') as file:
-                script_content = file.read()
-            #scope.run_code(script_content)
-        elif "import" == x["url"]:
-            pass
-            #scope.run_code("import " +  x["title"])
-        elif "from" == x["url"]:
-            pass
-            #scope.run_code("from " +  x["title"])
-        elif "define" == x["url"]:
-            
-            d = x["title"].split("=")
-            x1 = scope.split_function_call( d[1])
-            if x1[1] is None and "'" in d[1]:
-                exec(x["title"], globals(), scope.local_scope1)
-            elif x1[1] is None:
-                scope.local_scope1[d[0].strip()]  = scope.get_object_from_scope(x1[0])
-            else:
-                scope.local_scope1[d[0].strip()]  = scope.get_object_from_scope(x1[0])(*x1[1][0],**x1[1][1] )
-
-
-            
-            
-
-            
 
 
     
