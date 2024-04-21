@@ -196,33 +196,6 @@ class md_uplinks(md_text_replacement_base):
 
 
 
-def update_markdown(content):
-    scope = new_scope()
-    
-
-    links = extract_links_with_positions(content)
-    for i, x in links.iterrows():
-        x["obj"].run_code(scope)
-
-    content = update_content(content , links, scope)
-
-    return content
-
-
-def update_markdown_file(filename, outFilename = None):
-    
-    with open(filename, 'r', encoding='utf-8') as file:
-        content = file.read()   
-    
-    content = update_markdown(content)
-    
-    file_path = outFilename if  outFilename is not None else filename
-
-    with open(file_path, 'w', encoding='utf-8') as file:
-        file.write(content)
-    
-
-
 def extract_complex_markdown_links(markdown_text, score):
 
     links = []
@@ -472,6 +445,8 @@ class relative_string:
     def __str__(self) -> str:
         return self.content
 
+
+
 def update_content(content, links, scope):
     content1 = relative_string(content)
     for i, link in links.iterrows():
@@ -490,6 +465,34 @@ def update_content(content, links, scope):
 
     return str(content1)
 
+
+
+
+def update_markdown(content):
+    scope = new_scope()
+    
+
+    links = extract_links_with_positions(content)
+    for i, x in links.iterrows():
+        x["obj"].run_code(scope)
+
+    content = update_content(content , links, scope)
+
+    return content
+
+
+def update_markdown_file(filename, outFilename = None):
+    
+    with open(filename, 'r', encoding='utf-8') as file:
+        content = file.read()   
+    
+    content = update_markdown(content)
+    
+    file_path = outFilename if  outFilename is not None else filename
+
+    with open(file_path, 'w', encoding='utf-8') as file:
+        file.write(content)
+    
 
 
 class md_pyMarkdown(md_updater_base):

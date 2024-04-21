@@ -1,6 +1,6 @@
 
 
-md_Environment = {"start_pos" : 123}
+md_Environment = {}
 
 
 def set_Env(value):
