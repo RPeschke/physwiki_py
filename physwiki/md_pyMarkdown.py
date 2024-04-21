@@ -91,32 +91,119 @@ class new_scope():
         
 class md_text_replacement_base:
 
-    def update_function(self, scope)    :
+    def update_function(self, scope, env)    :
         pass
 
     def run_code(self, scope):
         pass
 
+    def skip_update(self):
+        return False
 
     
 
 
-def make_new_link(link, scope):
-    return f"[{scope(link['call'], link)}]({link["call_str"]})"
+
 
 
 class md_update_md_links(md_text_replacement_base):
+    
+    pattern = re.compile(
+        r'\[!\[([^\]]+)\]\(([^)]+)\)\]\(([^\)]+?\))'
+    )
     def __init__(self, call, call_str) -> None:
         self.call = call
         self.call_str = call_str
 
-    def update_function(self, scope):
-        return f"[{scope(self.call, self)}]({self.call_str})"
+    def update_function(self, scope, env):
+        
+        return f"[{scope(self.call, env)}]({self.call_str})"
+    
+
+
+class md_physwiki(md_text_replacement_base):
+    def __init__(self, call) -> None:
+        self.call = call
+
+
+    def update_function(self, scope, env):
+        textblock = scope(self.call, env)
+        for i in range(10 , -1 ,-1 ):
+            textblock = textblock.replace(f"filelevel{i}",f"filelevel{i+1}")
+        
+        if  textblock.find("<filelevel0>") != -1:
+            raise Exception("to many levels of nesting")
+        
+        return f'<physwiki call="{self.call}"><filelevel0>\n{textblock}\n</filelevel0></physwiki>\n'
+
+class md_physwiki_include(md_text_replacement_base):
+    def __init__(self, fileName) -> None:
+        self.fileName = fileName
+    
+
+
+    def run_code(self, scope):
+        scope.import_from_filepath_full(self.fileName)
+
+    def skip_update(self):
+        return True
+
+class md_physwiki_define(md_text_replacement_base):
+    def __init__(self, attributes) -> None:
+        self.attributes = attributes
+        
+
+    
+
+
+    def run_code(self, scope):
+        attributes = self.attributes
+        first_position = attributes.find('"')
+        last_position = attributes.rfind('"')
+        definition = attributes[first_position+1:last_position]
+        d = definition.split("=")    
+        
+        x1 = scope.split_function_call( d[1])
+        if x1[1] is None and "'" in d[1]:
+            exec(definition, globals(), scope.local_scope1)
+        elif x1[1] is None:
+            scope.local_scope1[d[0].strip()]  = scope.get_object_from_scope(x1[0])
+        else:
+            scope.local_scope1[d[0].strip()]  = scope.get_object_from_scope(x1[0])(*x1[1][0],**x1[1][1] )
+
+
+
+
+    def skip_update(self):
+        return True
+
+    
+
+class md_uplinks(md_text_replacement_base):
+    def __init__(self, url, score) -> None:
+        super().__init__()
+        self.url = url
+        call  = url.replace("#python@" , "")
+        self.call  =call.replace("python@" , "")
+        self.call_str = url if score != 10 else "#python@" + url
+
+
+    def update_function(self, scope, env):
+        return f"[{scope(self.call, env)}]({self.call_str})"
+        
+
+
+
+
 
 def update_markdown(content):
     scope = new_scope()
+    
 
-    links = extract_links_with_positions(content, scope)
+    links = extract_links_with_positions(content)
+    for i, x in links.iterrows():
+        x["obj"].run_code(scope)
+
     content = update_content(content , links, scope)
 
     return content
@@ -137,14 +224,9 @@ def update_markdown_file(filename, outFilename = None):
 
 
 def extract_complex_markdown_links(markdown_text, score):
-    # Regex pattern to capture links that may contain nested image links
-    pattern = re.compile(
-        r'\[!\[([^\]]+)\]\(([^)]+)\)\]\(([^\)]+?\))'
-    )
 
-    # Find all matches in the markdown text
     links = []
-    for match in pattern.finditer(markdown_text):
+    for match in md_update_md_links.pattern.finditer(markdown_text):
         img_alt_text = match.group(1)  # Alt text of the nested image
         img_url = match.group(2)       # URL of the image
         link_url = match.group(3)      # URL of the outer link
@@ -165,29 +247,18 @@ def extract_complex_markdown_links(markdown_text, score):
         call_str = link_url if score != 10 else "#python@" + link_url
 
         links.append({
-                'text': f"![{img_alt_text}]({img_url})",
-                'url': link_url,
                 'start_pos': start_pos,
                 'end_pos': end_pos,
                 "score" : score,
-                "update_function" : make_new_link,
-                "call" : call,
-                "call_str" : call_str
+                "obj"  : md_update_md_links(call,  call_str)
+
         })
        
 
     return links
 
 
-def new_tag_block(link, scope):
-    textblock = scope(link['call'], link)
-    for i in range(10 , -1 ,-1 ):
-        textblock = textblock.replace(f"filelevel{i}",f"filelevel{i+1}")
-    
-    if  textblock.find("<filelevel0>") != -1:
-        raise Exception("to many levels of nesting")
-    
-    return f'<physwiki call="{link["url"]}"><filelevel0>\n{textblock}\n</filelevel0></physwiki>\n'
+
     
     
 
@@ -220,14 +291,11 @@ def updated_custom_tags(markdown_text, score):
         call = markdown_text[call_begin+1:call_end]
 
         code_blocks.append({
-            'url': call,
-            'text': "",
             'start_pos':start_pos,
             'end_pos': end_pos,
             "score" : score,
-            "update_function" : new_tag_block,
-            "call" : call,
-            "call_str" : ""
+            "obj" : md_physwiki(call)
+
         })
     return code_blocks
 
@@ -237,42 +305,43 @@ def handle_physwiki_call(markdown_text, match, score):
     last_position = attributes.rfind('"')
     call = attributes[first_position+1:last_position]
     return {
-            'url': call,
-            'text': "",
             'start_pos':match.start(),
             'end_pos': match.end(),
             "score" : score,
-            "update_function" : new_tag_block,
-            "call" : call,
-            "call_str" : ""
+            "obj" : md_physwiki(call)
+
         }
 
-def handle_physwiki_include(markdown_text, match, score, scope):
+def handle_physwiki_include(markdown_text, match, score):
     attributes = match.group(2)
     first_position = attributes.find('"')
     last_position = attributes.rfind('"')
     file_path = attributes[first_position+1:last_position]
-    scope.import_from_filepath_full(file_path)
+    return {
+            'start_pos':match.start(),
+            'end_pos': match.end(),
+            "score" : score,
+            "obj" : md_physwiki_include(file_path)
 
-def handle_physwiki_define(markdown_text, match, score, scope):
+        }
+    
+
+def handle_physwiki_define(markdown_text, match, score):
     attributes = match.group(2)
-    first_position = attributes.find('"')
-    last_position = attributes.rfind('"')
-    definition = attributes[first_position+1:last_position]
-    d = definition.split("=")
-    x1 = scope.split_function_call( d[1])
-    if x1[1] is None and "'" in d[1]:
-        exec(definition, globals(), scope.local_scope1)
-    elif x1[1] is None:
-        scope.local_scope1[d[0].strip()]  = scope.get_object_from_scope(x1[0])
-    else:
-        scope.local_scope1[d[0].strip()]  = scope.get_object_from_scope(x1[0])(*x1[1][0],**x1[1][1] )
+
+    return {
+            'start_pos':match.start(),
+            'end_pos': match.end(),
+            "score" : score,
+            "obj" : md_physwiki_define(attributes)
+
+        }
 
 
             
             
 
-def find_custom_tags(markdown_text, score, scope):
+def find_custom_tags(markdown_text, score):
     
     # Regex pattern to match custom tags like <physwiki call="myFunction()"/>
     # This pattern captures the tag name and its attributes.
@@ -290,59 +359,24 @@ def find_custom_tags(markdown_text, score, scope):
         attribute_name = attributes.split("=")[0]
         if attribute_name == "call":
             code_blocks.append( handle_physwiki_call(markdown_text, match , score) )
-            continue
+            
         
         if attribute_name == "include":
-            handle_physwiki_include(markdown_text, match, score, scope)
-            continue
+            code_blocks.append( handle_physwiki_include(markdown_text, match, score))
+            
 
         if attribute_name == "define":
-            handle_physwiki_define(markdown_text, match, score, scope)
-            continue
+            code_blocks.append(  handle_physwiki_define(markdown_text, match, score) )
+            
             
                                
 
     return code_blocks
 
 
-def extract_python_code_blocks(markdown_text, score):
-    def make_new_code_block(link, scope):
-        return f"""
-```python@{link["url"]} 
-{scope(link['call'], link)}
-```
-"""
-    # Regex pattern to capture Python code blocks with a specific start pattern
-    pattern = re.compile(
-        r'```python@(\w+\([^)]*\))\n(.*?)\n```', re.DOTALL
-    )
 
-    # Find all matches in the markdown text
-    code_blocks = []
-    for match in pattern.finditer(markdown_text):
-        function_call = match.group(1)  # Capture the function call after '@'
-        code_body = match.group(2)      # Capture the code block body
-        start_pos = match.start()
-        end_pos = match.end()
-        call  = function_call.replace("#python@" , "")
-        call  =call.replace("python@" , "")
-        call_str = "python@" + function_call
 
-        # Store details in a dictionary for better structure
-        code_blocks.append({
-            'url': function_call,
-            'text': code_body.strip(),
-            'start_pos': start_pos,
-            'end_pos': end_pos,
-            "score" : score,
-            "update_function" : make_new_code_block,
-            "call" : call,
-            "call_str" : call_str
-        })
-
-    return code_blocks
-
-def extract_links_with_positions(content, scope):
+def extract_links_with_positions(content):
     def get_links(content, regex, score):
         matches = regex.finditer(content)
         links = []
@@ -359,14 +393,10 @@ def extract_links_with_positions(content, scope):
             call_str = url if score != 10 else "#python@" + url
 
             links.append({
-                'text': link_text,
-                'url': url,
                 'start_pos': start_pos,
                 'end_pos': end_pos,
                 "score" : score,
-                "update_function" : make_new_link,
-                "call" : call,
-                "call_str" : call_str
+                "obj" : md_uplinks(url ,score),
             })
 
         return links
@@ -398,11 +428,9 @@ def extract_links_with_positions(content, scope):
         extract_complex_markdown_links(content, 20)
     )
 
+
     links.extend(
-        extract_python_code_blocks(content, 30)
-    )
-    links.extend(
-        find_custom_tags(content, 40, scope)
+        find_custom_tags(content, 40)
     )
     links.extend(
         updated_custom_tags(content , 50)
@@ -418,36 +446,49 @@ def extract_links_with_positions(content, scope):
 
     return df
 
-# Example usage
 
 
 
 
 
 
-    
+class relative_string:
+    def __init__(self, content) -> None:
+        self.offset = 0
+        self.content = content
 
+    def replace(self, start_index, end_index, new_string):
+        # Ensure indices are within the string length
+        start_index +=  self.offset
+        end_index   +=  self.offset
+        if start_index < 0 or end_index > len(self.content) or start_index > end_index:
+            raise ValueError("Invalid indices for the provided string.")
+        
+        # Construct the new string
+        self.content = self.content[:start_index] + new_string + self.content[end_index:]
+        self.offset += len(new_string) - (end_index - start_index )   
+        return self.content       
 
-
-def replace_substring(original_string, start_index, end_index, new_string):
-    # Ensure indices are within the string length
-    if start_index < 0 or end_index > len(original_string) or start_index > end_index:
-        raise ValueError("Invalid indices for the provided string.")
-    
-    # Construct the new string
-    modified_string = original_string[:start_index] + new_string + original_string[end_index:]
-    return modified_string
+    def __str__(self) -> str:
+        return self.content
 
 def update_content(content, links, scope):
-    offset = 0
+    content1 = relative_string(content)
     for i, link in links.iterrows():
-        if link['call'] is not None:
-            link['line'] = content[:link['start_pos']].count('\n') + 1 
-            newString = link["update_function"](link, scope) # f"[{scope(link['call'], link)}]({link["call_str"]})"
-            content = replace_substring(content, link['start_pos'] + offset, link['end_pos'] + offset, newString)
-            offset += len(newString) - (link['end_pos'] -  link['start_pos'])    
+        obj = link["obj"]
+        if obj.skip_update():
+            continue
+        
+        
+        env = {
+            'line' :  content[:link['start_pos']].count('\n') + 1        
+            }
+        
+        newString         = obj.update_function(scope, env) 
+        content1.replace(link['start_pos'], link['end_pos'], newString)
+        
 
-    return content
+    return str(content1)
 
 
 
